@@ -18,7 +18,7 @@ def main():
     )
     acknowledgements = Acknowledgements(packages=packages)
 
-    with open("acknowledgements.json", "w") as file:
+    with open(os.path.join(arguments["output"], "Acknowledgements.json"), "w") as file:
         file.write(acknowledgements.to_json(indent=2))
 
     print("done writing acknowledgements ✨")
@@ -42,9 +42,14 @@ def parse_arguments():
 
         if arg == "--scheme" and (scheme := get_next_value()):
             arguments["scheme"] = scheme
+        if arg == "--output" and (output := get_next_value()):
+            arguments["output"] = output
 
     if arguments.get("scheme") is None:
         raise Exception("Please provide a scheme with the --scheme flag")
+
+    if arguments.get("output") is None:
+        raise Exception("Please provide a output path with the --output flag")
 
     return arguments
 
@@ -149,7 +154,8 @@ class AcknowledgementPackage:
 
 
 class Arguments(TypedDict):
-    scheme: Optional[str]
+    scheme: str
+    output: str
 
 
 class PackageFileContentObjectPinState(TypedDict):
