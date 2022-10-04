@@ -17,11 +17,13 @@ def main():
         package_file_content=package_file_content, packages_licenses=packages_licenses
     )
 
-    authors_list = subprocess.getoutput(
+    contributors_list = subprocess.getoutput(
         f'git log "--pretty=format:%an <%ae>"'
     ).splitlines()
-    formatted_authors = format_authors(authors_list=authors_list)
-    acknowledgements = Acknowledgements(packages=packages, authors=formatted_authors)
+    formatted_contributors = format_contributors(contributors_list=contributors_list)
+    acknowledgements = Acknowledgements(
+        packages=packages, contributors=formatted_contributors
+    )
 
     with open(os.path.join(arguments["output"], "Acknowledgements.json"), "w") as file:
         file.write(acknowledgements.to_json(indent=2))
@@ -29,84 +31,92 @@ def main():
     print("done writing acknowledgements ✨")
 
 
-def format_authors(authors_list: List[str]):
-    """Returns formatted authors
+def format_contributors(contributors_list: List[str]):
+    """Returns formatted contributors
 
-    >>> format_authors({'John <john@email.com>', 'Kamaal <kamaal@email.com>', 'John Smith <john.smith@email.com>', 'Kamaal Farah <kamaal.farah@email.com>'})
-    [Author(name='John Smith', email=None, contributions=2), Author(name='Kamaal Farah', email=None, contributions=2)]
+    >>> format_contributors({'John <john@email.com>', 'Kamaal <kamaal@email.com>', 'John Smith <john.smith@email.com>', 'Kamaal Farah <kamaal.farah@email.com>'})
+    [Contributor(name='John Smith', email=None, contributions=2), Contributor(name='Kamaal Farah', email=None, contributions=2)]
 
-    >>> format_authors({'John <john@email.com>', 'John Smith <john.smith@email.com>', 'Kamaal Farah <kamaal.farah@email.com>', 'Kamaal <kamaal@email.com>'})
-    [Author(name='John Smith', email=None, contributions=2), Author(name='Kamaal Farah', email=None, contributions=2)]
+    >>> format_contributors({'John <john@email.com>', 'John Smith <john.smith@email.com>', 'Kamaal Farah <kamaal.farah@email.com>', 'Kamaal <kamaal@email.com>'})
+    [Contributor(name='John Smith', email=None, contributions=2), Contributor(name='Kamaal Farah', email=None, contributions=2)]
 
-    >>> format_authors({'Kent Clark <kent.clark@email.com>', 'John <john@email.com>', 'John Smith <john.smith@email.com>', 'Kamaal Farah <kamaal.farah@email.com>', 'Kamaal <kamaal@email.com>'})
-    [Author(name='John Smith', email=None, contributions=2), Author(name='Kamaal Farah', email=None, contributions=2), Author(name='Kent Clark', email=None, contributions=1)]
+    >>> format_contributors({'Kent Clark <kent.clark@email.com>', 'John <john@email.com>', 'John Smith <john.smith@email.com>', 'Kamaal Farah <kamaal.farah@email.com>', 'Kamaal <kamaal@email.com>'})
+    [Contributor(name='John Smith', email=None, contributions=2), Contributor(name='Kamaal Farah', email=None, contributions=2), Contributor(name='Kent Clark', email=None, contributions=1)]
     """
 
-    author_names_mapped_by_emails: Dict[str, List[str]] = {}
-    for author_entry in authors_list:
-        splitted_author_entry = author_entry.split("<")
-        author_name = (
-            "".join(splitted_author_entry[:-1])
+    contributor_names_mapped_by_emails: Dict[str, List[str]] = {}
+    for contributor_entry in contributors_list:
+        splitted_contributor_entry = contributor_entry.split("<")
+        contributor_name = (
+            "".join(splitted_contributor_entry[:-1])
             .strip()
             .replace("<", "")
             .replace(">", "")
         )
-        email = splitted_author_entry[-1].strip().replace("<", "").replace(">", "")
+        email = splitted_contributor_entry[-1].strip().replace("<", "").replace(">", "")
 
-        author_names_mapped_by_emails[email] = author_names_mapped_by_emails.get(
-            email, []
-        ) + [author_name]
+        contributor_names_mapped_by_emails[
+            email
+        ] = contributor_names_mapped_by_emails.get(email, []) + [contributor_name]
 
-    authors: List[Author] = []
-    for (email, author_names) in author_names_mapped_by_emails.items():
-        longest_author_name = ""
+    contributors: List[Contributor] = []
+    for (email, contributor_names) in contributor_names_mapped_by_emails.items():
+        longest_contributor_name = ""
 
-        for author_name in author_names:
-            if len(author_name) > len(longest_author_name):
-                longest_author_name = author_name
+        for contributor_name in contributor_names:
+            if len(contributor_name) > len(longest_contributor_name):
+                longest_contributor_name = contributor_name
 
-        authors.append(
-            Author(
-                name=longest_author_name, email=email, contributions=len(author_names)
+        contributors.append(
+            Contributor(
+                name=longest_contributor_name,
+                email=email,
+                contributions=len(contributor_names),
             )
         )
 
-    ultimate_authors: List[Author] = []
-    for author in authors:
-        author_first_names_names = map(
-            lambda author: author.first_name, ultimate_authors
+    merged_contributors: List[Contributor] = []
+    for contributor in contributors:
+        contributor_first_names_names = map(
+            lambda contributor: contributor.first_name, merged_contributors
         )
-        if author.first_name in author_first_names_names:
-            for (index, ultimate_author) in enumerate(ultimate_authors):
-                first_name_is_the_same = author.first_name == ultimate_author.first_name
-                name_is_the_same = author.name == ultimate_author.name
+        if contributor.first_name in contributor_first_names_names:
+            for (index, merged_author) in enumerate(merged_contributors):
+                first_name_is_the_same = (
+                    contributor.first_name == merged_author.first_name
+                )
+                name_is_the_same = contributor.name == merged_author.name
 
                 one_of_authors_has_just_a_single_name = (
-                    author.has_just_a_single_name
-                    or ultimate_author.has_just_a_single_name
-                ) and len(author.name_components) != len(
-                    ultimate_author.name_components
+                    contributor.has_just_a_single_name
+                    or merged_author.has_just_a_single_name
+                ) and len(contributor.name_components) != len(
+                    merged_author.name_components
                 )
 
                 if first_name_is_the_same and (
                     one_of_authors_has_just_a_single_name or name_is_the_same
                 ):
-                    if len(author.name) > len(ultimate_author.name):
-                        longest_author_name = author.name
+                    if len(contributor.name) > len(merged_author.name):
+                        longest_author_name = contributor.name
                     else:
-                        longest_author_name = ultimate_author.name
+                        longest_author_name = merged_author.name
 
-                    ultimate_authors[index] = Author(
+                    merged_contributors[index] = Contributor(
                         name=longest_author_name,
                         email=None,
-                        contributions=author.contributions
-                        + ultimate_author.contributions,
+                        contributions=contributor.contributions
+                        + merged_author.contributions,
                     )
         else:
-            author.email = None
-            ultimate_authors.append(author)
+            contributor.email = None
+            merged_contributors.append(contributor)
 
-    return sorted(ultimate_authors, key=lambda x: x.contributions, reverse=True)
+    return sorted(
+        sorted(merged_contributors, key=lambda contributor: contributor.name),
+        key=lambda contributor: contributor.contributions,
+        reverse=True,
+    )
 
 
 def parse_arguments():
@@ -219,7 +229,7 @@ def get_packages_directory(scheme: str):
 @dataclass
 class Acknowledgements:
     packages: List["AcknowledgementPackage"]
-    authors: List["Author"]
+    contributors: List["Contributor"]
 
     def to_dict(self):
         dictionary_to_return = {}
@@ -232,7 +242,7 @@ class Acknowledgements:
 
 
 @dataclass
-class Author:
+class Contributor:
     name: str
     email: Optional[str]
     contributions: int
