@@ -3,7 +3,7 @@ import sys
 import json
 import subprocess
 from dataclasses import asdict, dataclass
-from typing import Dict, List, Optional, TypedDict
+from typing import Dict, List, Optional, Set, TypedDict
 
 
 def main():
@@ -16,12 +16,49 @@ def main():
     packages = package_file_content_to_acknowledgments(
         package_file_content=package_file_content, packages_licenses=packages_licenses
     )
-    acknowledgements = Acknowledgements(packages=packages)
+
+    authors_list = set(
+        subprocess.getoutput(f'git log "--pretty=format:%an"').splitlines()
+    )
+    formatted_authors = format_authors(authors_list=authors_list)
+    acknowledgements = Acknowledgements(packages=packages, authors=formatted_authors)
 
     with open(os.path.join(arguments["output"], "Acknowledgements.json"), "w") as file:
         file.write(acknowledgements.to_json(indent=2))
 
     print("done writing acknowledgements ✨")
+
+
+def format_authors(authors_list: Set[str]):
+    """Returns formatted authors
+
+    >>> format_authors({'John', 'Kamaal', 'John Smith', 'Kamaal Farah'})
+    [Author(name='John Smith'), Author(name='Kamaal Farah')]
+
+    >>> format_authors({'John', 'John Smith', 'Kamaal Farah', 'Kamaal'})
+    [Author(name='John Smith'), Author(name='Kamaal Farah')]
+
+    >>> format_authors({'Kent Clark', 'John', 'John Smith', 'Kamaal Farah', 'Kamaal'})
+    [Author(name='John Smith'), Author(name='Kamaal Farah'), Author(name='Kent Clark')]
+    """
+
+    authors: List[Author] = []
+    first_names: List[str] = []
+    for author_name in authors_list:
+        author = Author(name=author_name)
+
+        if (
+            author in authors
+            or author.first_name in first_names
+            or author.has_just_a_single_name
+        ):
+            continue
+
+        first_names.append(author.first_name)
+
+        authors.append(author)
+
+    return sorted(authors, key=lambda x: x.name.lower())
 
 
 def parse_arguments():
@@ -134,6 +171,7 @@ def get_packages_directory(scheme: str):
 @dataclass
 class Acknowledgements:
     packages: List["AcknowledgementPackage"]
+    authors: List["Author"]
 
     def to_dict(self):
         dictionary_to_return = {}
@@ -143,6 +181,23 @@ class Acknowledgements:
 
     def to_json(self, indent: Optional[int] = None):
         return json.dumps(self.to_dict(), indent=indent)
+
+
+@dataclass
+class Author:
+    name: str
+
+    @property
+    def first_name(self):
+        return self.name_components[0]
+
+    @property
+    def name_components(self):
+        return self.name.split(" ")
+
+    @property
+    def has_just_a_single_name(self):
+        return len(self.name_components) == 1
 
 
 @dataclass
