@@ -3,7 +3,7 @@ import sys
 import json
 import subprocess
 from dataclasses import asdict, dataclass
-from typing import Dict, List, Optional, Set, TypedDict
+from typing import Dict, List, Optional, TypedDict
 
 
 def main():
@@ -17,9 +17,9 @@ def main():
         package_file_content=package_file_content, packages_licenses=packages_licenses
     )
 
-    authors_list = set(
-        subprocess.getoutput(f'git log "--pretty=format:%an"').splitlines()
-    )
+    authors_list = subprocess.getoutput(
+        f'git log "--pretty=format:%an <%ae>"'
+    ).splitlines()
     formatted_authors = format_authors(authors_list=authors_list)
     acknowledgements = Acknowledgements(packages=packages, authors=formatted_authors)
 
@@ -29,36 +29,84 @@ def main():
     print("done writing acknowledgements ✨")
 
 
-def format_authors(authors_list: Set[str]):
+def format_authors(authors_list: List[str]):
     """Returns formatted authors
 
-    >>> format_authors({'John', 'Kamaal', 'John Smith', 'Kamaal Farah'})
-    [Author(name='John Smith'), Author(name='Kamaal Farah')]
+    >>> format_authors({'John <john@email.com>', 'Kamaal <kamaal@email.com>', 'John Smith <john.smith@email.com>', 'Kamaal Farah <kamaal.farah@email.com>'})
+    [Author(name='John Smith', email=None, contributions=2), Author(name='Kamaal Farah', email=None, contributions=2)]
 
-    >>> format_authors({'John', 'John Smith', 'Kamaal Farah', 'Kamaal'})
-    [Author(name='John Smith'), Author(name='Kamaal Farah')]
+    >>> format_authors({'John <john@email.com>', 'John Smith <john.smith@email.com>', 'Kamaal Farah <kamaal.farah@email.com>', 'Kamaal <kamaal@email.com>'})
+    [Author(name='John Smith', email=None, contributions=2), Author(name='Kamaal Farah', email=None, contributions=2)]
 
-    >>> format_authors({'Kent Clark', 'John', 'John Smith', 'Kamaal Farah', 'Kamaal'})
-    [Author(name='John Smith'), Author(name='Kamaal Farah'), Author(name='Kent Clark')]
+    >>> format_authors({'Kent Clark <kent.clark@email.com>', 'John <john@email.com>', 'John Smith <john.smith@email.com>', 'Kamaal Farah <kamaal.farah@email.com>', 'Kamaal <kamaal@email.com>'})
+    [Author(name='John Smith', email=None, contributions=2), Author(name='Kamaal Farah', email=None, contributions=2), Author(name='Kent Clark', email=None, contributions=1)]
     """
 
+    author_names_mapped_by_emails: Dict[str, List[str]] = {}
+    for author_entry in authors_list:
+        splitted_author_entry = author_entry.split("<")
+        author_name = (
+            "".join(splitted_author_entry[:-1])
+            .strip()
+            .replace("<", "")
+            .replace(">", "")
+        )
+        email = splitted_author_entry[-1].strip().replace("<", "").replace(">", "")
+
+        author_names_mapped_by_emails[email] = author_names_mapped_by_emails.get(
+            email, []
+        ) + [author_name]
+
     authors: List[Author] = []
-    first_names: List[str] = []
-    for author_name in authors_list:
-        author = Author(name=author_name)
+    for (email, author_names) in author_names_mapped_by_emails.items():
+        longest_author_name = ""
 
-        if (
-            author in authors
-            or author.first_name in first_names
-            or author.has_just_a_single_name
-        ):
-            continue
+        for author_name in author_names:
+            if len(author_name) > len(longest_author_name):
+                longest_author_name = author_name
 
-        first_names.append(author.first_name)
+        authors.append(
+            Author(
+                name=longest_author_name, email=email, contributions=len(author_names)
+            )
+        )
 
-        authors.append(author)
+    ultimate_authors: List[Author] = []
+    for author in authors:
+        author_first_names_names = map(
+            lambda author: author.first_name, ultimate_authors
+        )
+        if author.first_name in author_first_names_names:
+            for (index, ultimate_author) in enumerate(ultimate_authors):
+                first_name_is_the_same = author.first_name == ultimate_author.first_name
+                name_is_the_same = author.name == ultimate_author.name
 
-    return sorted(authors, key=lambda x: x.name.lower())
+                one_of_authors_has_just_a_single_name = (
+                    author.has_just_a_single_name
+                    or ultimate_author.has_just_a_single_name
+                ) and len(author.name_components) != len(
+                    ultimate_author.name_components
+                )
+
+                if first_name_is_the_same and (
+                    one_of_authors_has_just_a_single_name or name_is_the_same
+                ):
+                    if len(author.name) > len(ultimate_author.name):
+                        longest_author_name = author.name
+                    else:
+                        longest_author_name = ultimate_author.name
+
+                    ultimate_authors[index] = Author(
+                        name=longest_author_name,
+                        email=None,
+                        contributions=author.contributions
+                        + ultimate_author.contributions,
+                    )
+        else:
+            author.email = None
+            ultimate_authors.append(author)
+
+    return sorted(ultimate_authors, key=lambda x: x.contributions, reverse=True)
 
 
 def parse_arguments():
@@ -186,6 +234,8 @@ class Acknowledgements:
 @dataclass
 class Author:
     name: str
+    email: Optional[str]
+    contributions: int
 
     @property
     def first_name(self):
