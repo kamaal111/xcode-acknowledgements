@@ -64,6 +64,8 @@ def format_contributors(contributors_list: List[str]):
         longest_contributor_name = ""
 
         for contributor_name in contributor_names:
+            if contributor_name == "kamaal111":
+                contributor_name = "Kamaal Farah"
             if len(contributor_name) > len(longest_contributor_name):
                 longest_contributor_name = contributor_name
 
@@ -209,21 +211,22 @@ def decode_package_file() -> "PackageFileContent":
 
 
 def get_packages_directory(scheme: str):
-    if project_path := get_path_from_root_ending_with(search_string=".xcodeproj"):
-        output = subprocess.getoutput(
-            f"xcodebuild -project {project_path} -target {scheme} -showBuildSettings"
-        )
-
-        output_search_line = "    BUILD_DIR = "
-        for line in output.splitlines():
-            if output_search_line in line:
-                return line.replace(output_search_line, "").replace(
-                    "Build/Products", "SourcePackages/checkouts"
-                )
-    else:
+    project_path = get_path_from_root_ending_with(search_string=".xcodeproj")
+    if project_path is None:
         raise Exception("Project not found at root")
 
-    raise Exception("Build directory not found")
+    output = subprocess.getoutput(
+        f'xcodebuild -project {project_path} -target "{scheme}" -showBuildSettings'
+    )
+
+    output_search_line = "    BUILD_DIR = "
+    for line in output.splitlines():
+        if output_search_line in line:
+            return line.replace(output_search_line, "").replace(
+                "Build/Products", "SourcePackages/checkouts"
+            )
+
+    raise Exception(f"Build directory not found from {output=}")
 
 
 @dataclass
