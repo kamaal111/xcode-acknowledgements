@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import subprocess
+from pathlib import Path
 from dataclasses import asdict, dataclass
 from typing import Dict, List, Optional, TypedDict
 
@@ -179,32 +180,46 @@ def package_file_content_to_acknowledgments(
     package_file_content: "PackageFileContent", packages_licenses: Dict[str, str]
 ):
     packages: List[AcknowledgementPackage] = []
-    for pin in package_file_content["object"]["pins"]:
-        package_name = pin["package"]
-        url = pin["repositoryURL"]
-        if url.endswith(".git"):
-            url = url[:-4]
+    if package_object := package_file_content.get("object"):
+        for pin in package_object["pins"]:
+            package_name = pin["package"]
+            url = pin["repositoryURL"]
+            if url.endswith(".git"):
+                url = url[:-4]
 
-        try:
             author = url.split("/")[-2]
-        except IndexError:
-            pass
 
-        acknowledgement = AcknowledgementPackage(
-            name=package_name,
-            url=url,
-            author=author,
-            license=packages_licenses.get(package_name),
-        )
-        packages.append(acknowledgement)
+            acknowledgement = AcknowledgementPackage(
+                name=package_name,
+                url=url,
+                author=author,
+                license=packages_licenses.get(package_name),
+            )
+            packages.append(acknowledgement)
+    else:
+        for pin in package_file_content["pins"]:
+            url = pin["location"]
+            if url.endswith(".git"):
+                url = url[:-4]
+
+            url_split_by_separator = url.split("/")
+            package_name = url_split_by_separator[-1]
+            author = url_split_by_separator[-2]
+            acknowledgement = AcknowledgementPackage(
+                name=package_name,
+                url=url,
+                author=author,
+                license=packages_licenses.get(package_name),
+            )
+            packages.append(acknowledgement)
 
     return packages
 
 
 def decode_package_file() -> "PackageFileContent":
     if workspace_path := get_path_from_root_ending_with(search_string=".xcworkspace"):
-        path_string = f"{workspace_path}/xcshareddata/swiftpm/Package.resolved"
-        with open(path_string, "r") as file:
+        path = Path(workspace_path) / "xcshareddata" / "swiftpm" / "Package.resolved"
+        with path.open(mode="r") as file:
             return json.loads(file.read())
 
     raise Exception("Workspace not found at root")
@@ -292,9 +307,17 @@ class PackageFileContentObject(TypedDict):
     pins: List[PackageFileContentObjectPin]
 
 
+class PackageFileContentPin(TypedDict):
+    identity: str
+    kind: str
+    location: str
+    state: PackageFileContentObjectPinState
+
+
 class PackageFileContent(TypedDict):
     version: int
-    object: PackageFileContentObject
+    object: Optional[PackageFileContentObject]
+    pins: Optional[List[PackageFileContentPin]]
 
 
 main()
