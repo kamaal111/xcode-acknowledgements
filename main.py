@@ -26,8 +26,8 @@ def main():
         packages=packages, contributors=formatted_contributors
     )
 
-    with open(os.path.join(arguments["output"], "Acknowledgements.json"), "w") as file:
-        file.write(acknowledgements.to_json(indent=2))
+    output_path = Path(arguments["output"]) / "Acknowledgements.json"
+    output_path.write_text(acknowledgements.to_json(indent=2))
 
     print("done writing acknowledgements ✨")
 
@@ -219,8 +219,7 @@ def package_file_content_to_acknowledgments(
 def decode_package_file() -> "PackageFileContent":
     if workspace_path := get_path_from_root_ending_with(search_string=".xcworkspace"):
         path = Path(workspace_path) / "xcshareddata" / "swiftpm" / "Package.resolved"
-        with path.open(mode="r") as file:
-            return json.loads(file.read())
+        return json.loads(path.read_text())
 
     raise Exception("Workspace not found at root")
 
