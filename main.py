@@ -65,7 +65,7 @@ def format_contributors(contributors_list: List[str]):
         longest_contributor_name = ""
 
         for contributor_name in contributor_names:
-            if contributor_name == "kamaal111":
+            if contributor_name == "kamaal111" or contributor_name == "Kamaal":
                 contributor_name = "Kamaal Farah"
             if len(contributor_name) > len(longest_contributor_name):
                 longest_contributor_name = contributor_name
